@@ -1,7 +1,7 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
-#暂且认为是eap的summary information
+
 def glorot(shape, dtype=tf.float32, scope='default'):
     with tf.variable_scope(scope):
         init_range = np.sqrt(6.0 / (shape[0] + shape[1]))
@@ -16,29 +16,33 @@ def zeros(shape, dtype=tf.float32, scope='default'):
         return tf.Variable(init)
 
 
-class GraphSNN(object):
-    def __init__(self, inputs, input_dim, hid_dims, output_dim, act_fn, scope='gsn'):
+class GraphCNN(object):
+    def __init__(self, inputs, input_dim, hid_dims, output_dim,
+                 max_depth, act_fn, scope='gcn'):
+
         self.inputs = inputs
         self.input_dim = input_dim
-        self.output_dim = output_dim
         self.hid_dims = hid_dims
+        self.output_dim = output_dim
+        self.max_depth = max_depth
         self.act_fn = act_fn
         self.scope = scope
-        self.summ_levels = 2
 
-        # initialize summarization parameters
-        self.dag_weights, self.dag_bias = \
+        # initialize message passing transformation parameters
+        self.prep_weights, self.prep_bias = \
             self.init(self.input_dim, self.hid_dims, self.output_dim)
-        self.global_weights, self.global_bias = \
+        self.proc_weights, self.proc_bias = \
             self.init(self.output_dim, self.hid_dims, self.output_dim)
-        # graph summarization operation
-        self.summaries = self.summarize()
+        self.agg_weights, self.agg_bias = \
+            self.init(self.output_dim, self.hid_dims, self.output_dim)
+        self.outputs = self.forward()
 
     def init(self, input_dim, hid_dims, output_dim):
         # Initialize the parameters
         weights = []
         bias = []
         curr_in_dim = input_dim
+
         # Hidden layers
         for hid_dim in hid_dims:
             weights.append(
@@ -46,26 +50,32 @@ class GraphSNN(object):
             bias.append(
                 zeros([hid_dim], scope=self.scope))
             curr_in_dim = hid_dim
+
         # Output layer
         weights.append(glorot([curr_in_dim, output_dim], scope=self.scope))
         bias.append(zeros([output_dim], scope=self.scope))
         return weights, bias
 
-    def summarize(self):
-        # summarize information
+    def forward(self):
         x = self.inputs
-        summaries = []
-        s = x
-        for i in range(len(self.dag_weights)):
-            s = tf.matmul(s, self.dag_weights[i])
-            s += self.dag_bias[i]
-            s = self.act_fn(s)
-        summaries.append(s)
-        # global level summary
-        for i in range(len(self.global_weights)):
-            s = tf.matmul(s, self.global_weights[i])
-            s += self.global_bias[i]
-            s = self.act_fn(s)
-        summaries.append(s)
-        #####print(summaries[0])
-        return summaries
+        # Raise x into higher dimension
+        for l in range(len(self.prep_weights)):
+            x = tf.matmul(x, self.prep_weights[l])
+            x += self.prep_bias[l]
+            x = self.act_fn(x)
+        for d in range(self.max_depth):
+            y = x
+            # Process the features
+            for l in range(len(self.proc_weights)):
+                y = tf.matmul(y, self.proc_weights[l])
+                y += self.proc_bias[l]
+                y = self.act_fn(y)
+            # Aggregate features
+            for l in range(len(self.agg_weights)):
+                y = tf.matmul(y, self.agg_weights[l])
+                y += self.agg_bias[l]
+                y = self.act_fn(y)
+
+            # assemble neighboring information
+            x = x + y
+        return x
