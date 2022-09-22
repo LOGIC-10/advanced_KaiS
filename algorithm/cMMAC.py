@@ -61,7 +61,7 @@ class Estimator:
         self.neighbors_list = [[0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5, 6]]
 
     def _build_value_model(self):
-
+        # shape是数据形状，列是state_dim = 88，行不定。
         self.state = X = tf.placeholder(shape=[None, self.state_dim], dtype=tf.float32, name="X")
 
         # The TD target value
@@ -80,7 +80,8 @@ class Estimator:
         return self.value_loss
 
     def _build_policy(self):
-
+        
+        # shape是数据形状，列是state_dim = 88，行不定。
         self.policy_state = tf.placeholder(shape=[None, self.state_dim], dtype=tf.float32, name="P")
         self.ACTION = tf.placeholder(shape=[None, self.action_dim], dtype=tf.float32, name="action")
         self.tfadv = tf.placeholder(shape=[None, 1], dtype=tf.float32, name='advantage')

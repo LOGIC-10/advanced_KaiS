@@ -196,6 +196,7 @@ class OrchestrateAgent(Agent):
             self.gsn.summaries[0], self.gsn.summaries[1], self.act_fn)
 
         # Draw action based on the probability
+        print("node_act_probs:",self.node_act_probs)
         logits = tf.log(self.node_act_probs)
         noise = tf.random_uniform(tf.shape(logits))
         self.node_acts = tf.nn.top_k(logits - tf.log(-tf.log(noise)), k=3).indices

@@ -13,14 +13,16 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 def flatten(list):
     return [y for x in list for y in x]
 
-
+#计算reward
 def calculate_reward(master1, master2, cur_done, cur_undone):
+    # cur_done：当前完成的请求
+    # cur_undone：当前未完成的请求
     weight = 1.0
     all_task = [float(cur_done[0] + cur_undone[0]), float(cur_done[1] + cur_undone[1])]
     fail_task = [float(cur_undone[0]), float(cur_undone[1])]
     reward = []
     # The ratio of requests that violate delay requirements
-    task_fail_rate = []
+    task_fail_rate = [] #违反延时要求的请求
     if all_task[0] != 0:
         task_fail_rate.append(fail_task[0] / all_task[0])
     else:
@@ -59,19 +61,21 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
     vaild_node = 6  # Number of edge nodes available
     SLOT_TIME = 0.5  # Time of one slot
     MAX_TESK_TYPE = 12  # Number of tesk types
-    POD_CPU = 15.0  # CPU resources required for a POD
-    POD_MEM = 1.0  # Memory resources required for a POD
+    POD_CPU = 15.0  # CPU resources required for a POD  ，POD是k8s中的最小执行单元（通常一个pod里面放一个docker app）
+    POD_MEM = 1.0  # Memory resources required for a POD ，POD是k8s中的最小执行单元（通常一个pod里面放一个docker app）
     # Resource demand coefficients for different types of services
-    service_coefficient = [0.8, 0.8, 0.9, 0.9, 1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3, 1.4, 1.4]
-    # Parameters related to DRL
+    service_coefficient = [0.8, 0.8, 0.9, 0.9, 1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3, 1.4, 1.4] 
+    #上面是14个服务，每个所需资源的系数。--service_coefficient：服务系数
+    # Parameters related to DRL（深度强化学习）
     epsilon = 0.5
     gamma = 0.9
     learning_rate = 1e-3
-    action_dim = 7
-    state_dim = 88
-    node_input_dim = 24
-    cluster_input_dim = 24
-    hid_dims = [16, 8]
+    action_dim = 7 #动作空间
+    state_dim = 88  #状态空间
+    print("state_dim = ",state_dim)
+    node_input_dim = 24  
+    cluster_input_dim = 24 
+    hid_dims = [16, 8] 
     output_dim = 8
     max_depth = 8
     entropy_weight_init = 1
@@ -210,8 +214,10 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
                 change_node, change_service, exp = act_offload_agent(orchestrate_agent, exp, done_tasks,
                                                                      undone_tasks, curr_tasks_in_queue,
                                                                      deploy_state_float)
-
+                print("选择节点：",change_node) #一共6个可用node
+                print("选择服务：",change_service) #这个是选择的服务
                 # Execute orchestration
+                # 在边缘节点上进行服务编排
                 for i in range(len(change_node)):
                     if change_service[i] < 0:
                         # Delete docker and free memory
@@ -309,20 +315,27 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
             mem_list1 = []
             cpu_list2 = []
             mem_list2 = []
-            task_num1 = [len(master1.task_queue)]
+            task_num1 = [len(master1.task_queue)] # 是个list结构。表示的是eap上的等待队列
             task_num2 = [len(master2.task_queue)]
             for i in range(3):
-                cpu_list1.append([master1.node_list[i].cpu, master1.node_list[i].cpu_max])
+                cpu_list1.append([master1.node_list[i].cpu, master1.node_list[i].cpu_max]) # 3个节点，每个节点两个参数维度，一共6个维度
                 mem_list1.append([master1.node_list[i].mem, master1.node_list[i].mem_max])
-                task_num1.append(len(master1.node_list[i].task_queue))
+                task_num1.append(len(master1.node_list[i].task_queue)) 
+                # task_num1是三个高价值节点上分别的任务长度，如【3，2，6】：第一个节点上排队了3个服务，第二个...
+                # append后，加上之前eap自身维护的请求队列。3+1 = 4 ，task_num1是4个维度。升维后是4*1。
+
             for i in range(3):
                 cpu_list2.append([master2.node_list[i].cpu, master2.node_list[i].cpu_max])
                 mem_list2.append([master2.node_list[i].mem, master2.node_list[i].mem_max])
                 task_num2.append(len(master2.node_list[i].task_queue))
             s_grid = np.array([flatten(flatten([deploy_state, [task_num1], cpu_list1, mem_list1])),
                                flatten(flatten([deploy_state, [task_num2], cpu_list1, mem_list1]))])
+            # 离散的
+            print("s_grid = ",s_grid)
+            print("np.array(s_grid).shape = ",np.array(s_grid).shape)
 
             # Dispatch decision
+            # 边缘接入点的请求分发
             act, valid_action_prob_mat, policy_state, action_choosen_mat, \
             curr_state_value, curr_neighbor_mask, next_state_ids = q_estimator.action(s_grid, ava_node, context,
                                                                                       epsilon)
@@ -335,6 +348,7 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
                     continue
                 if act[i] >= 0 and act[i] < 3:
                     master1.node_list[act[i]].task_queue.append(curr_task[i])
+                    # node_list[act[i]]表示的是在三个高价值节点中选的哪个node，然后把当前的任务，加到这个节点的任务队列中。
                     continue
                 if act[i] >= 3 and act[i] < 6:
                     master2.node_list[act[i] - 3].task_queue.append(curr_task[i])
@@ -392,15 +406,16 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
             master2.undone = master2.undone + undone[1]
             master1.done = master1.done + done[0]
             master2.done = master2.done + done[1]
-
-            cur_done = [master1.done - pre_done[0], master2.done - pre_done[1]]
-            cur_undone = [master1.undone - pre_undone[0], master2.undone - pre_undone[1]]
-
+            # 一共就选了两个高价值节点
+            cur_done = [master1.done - pre_done[0], master2.done - pre_done[1]] # 当前时刻完成的请求
+            cur_undone = [master1.undone - pre_undone[0], master2.undone - pre_undone[1]] # 当前时刻超时未完成的请求
+            # 
             pre_done = [master1.done, master2.done]
             pre_undone = [master1.undone, master2.undone]
 
             achieve_num.append(sum(cur_done))
             fail_num.append(sum(cur_undone))
+            # 计算获得的奖励
             immediate_reward = calculate_reward(master1, master2, cur_done, cur_undone)
 
             record.append([master1, master2, cur_done, cur_undone, immediate_reward])

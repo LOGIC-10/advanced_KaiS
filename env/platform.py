@@ -15,12 +15,12 @@ class Node:
         self.service_list = service_list
         self.task_queue = task_queue
 
-
+# eAPs
 class Master:
     def __init__(self, cpu, mem, node_list, task_queue, all_task, all_task_index, done, undone, done_kind, undone_kind):
         self.cpu = cpu  # GHz
         self.mem = mem  # MB
-        self.node_list = node_list
+        self.node_list = node_list #管理的节点
         self.task_queue = task_queue
         self.all_task = all_task
         self.all_task_index = all_task_index
