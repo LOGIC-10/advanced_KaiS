@@ -1,3 +1,4 @@
+# 云端
 class Cloud:
     def __init__(self, task_queue, service_list, cpu, mem):
         self.task_queue = task_queue
@@ -5,7 +6,7 @@ class Cloud:
         self.cpu = cpu  # GHz
         self.mem = mem  # GB
 
-
+# 边缘计算节点
 class Node:
     def __init__(self, cpu, mem, service_list, task_queue):
         self.cpu = cpu
@@ -15,9 +16,10 @@ class Node:
         self.service_list = service_list
         self.task_queue = task_queue
 
-# eAPs
+# eAPs（边缘接入点，管理多个边缘节点。用于请求分发）
 class Master:
-    def __init__(self, cpu, mem, node_list, task_queue, all_task, all_task_index, done, undone, done_kind, undone_kind):
+    def __init__(self, cpu, mem, node_list, task_queue, all_task, all_task_index, done, 
+    undone, done_kind, undone_kind):
         self.cpu = cpu  # GHz
         self.mem = mem  # MB
         self.node_list = node_list #管理的节点
@@ -29,11 +31,11 @@ class Master:
         self.done_kind = done_kind
         self.undone_kind = undone_kind
 
-
+# 执行体
 class Docker:
     def __init__(self, mem, cpu, available_time, kind, doing_task):
         self.mem = mem
         self.cpu = cpu
         self.available_time = available_time
         self.kind = kind
-        self.doing_task = doing_task
+        self.doing_task = doing_task 

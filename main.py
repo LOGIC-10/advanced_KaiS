@@ -9,7 +9,7 @@ from env.env_run import *
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-
+# 为了计算维度进行的展平函数（因为其他都是list结构所以自己写）
 def flatten(list):
     return [y for x in list for y in x]
 
@@ -56,6 +56,8 @@ def to_grid_rewards(node_reward):
 
 
 def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
+    # BREAK_POINT 这里就是 TASK_NUM = 5000
+    # TRAIN_TIMES = 50, CHO_CYCLE = 1000, RUN_TIMES = 500
     ############ Set up according to your own needs  ###########
     # The parameters are set to support the operation of the program, and may not be consistent with the actual system
     vaild_node = 6  # Number of edge nodes available
@@ -128,8 +130,8 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
         entropy_weight = entropy_weight_init
         order_response_rates = []
 
-        pre_done = [0, 0]
-        pre_undone = [0, 0]
+        pre_done = [0, 0] #
+        pre_undone = [0, 0] #
         context = [1, 1]
         ############ Set up according to your own needs  ###########
         # The parameters here are set only to support the operation of the program, and may not be consistent with the actual system
@@ -177,10 +179,16 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
                         master2.node_list[j].service_list.append(docker)
 
         ########### Each slot ###########
-        for slot in range(BREAK_POINT):
-            cur_time = cur_time + SLOT_TIME
+        slot_num = 0
+        for slot in range(BREAK_POINT): # BREAK_POINT就是task_num = 5000
+            cur_time = cur_time + SLOT_TIME # SLOT_TIME = 0.5
+            slot_num +=1
             ########### Each frame ###########
+            # CHO_CYCLE = 1000 . 也就是frame是slot的1000倍
             if slot % CHO_CYCLE == 0 and slot != 0:
+                print("Begin of a frame !")
+                print("slot_num = ",slot_num) #实验证实：1000个slot一个frame
+                slot_num = 0
                 done_tasks = []
                 undone_tasks = []
                 curr_tasks_in_queue = []
@@ -329,10 +337,10 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
                 mem_list2.append([master2.node_list[i].mem, master2.node_list[i].mem_max])
                 task_num2.append(len(master2.node_list[i].task_queue))
             s_grid = np.array([flatten(flatten([deploy_state, [task_num1], cpu_list1, mem_list1])),
-                               flatten(flatten([deploy_state, [task_num2], cpu_list1, mem_list1]))])
+                               flatten(flatten([deploy_state, [task_num2], cpu_list2, mem_list2]))])
             # 离散的
-            print("s_grid = ",s_grid)
-            print("np.array(s_grid).shape = ",np.array(s_grid).shape)
+            # print("s_grid = ",s_grid)
+            # print("np.array(s_grid).shape = ",np.array(s_grid).shape)
 
             # Dispatch decision
             # 边缘接入点的请求分发
@@ -392,6 +400,7 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
                 master2.node_list[i], undone, done, done_kind, undone_kind = update_docker(master2.node_list[i],
                                                                                            cur_time,
                                                                                            service_coefficient, POD_CPU)
+                # print("done:",done)
                 for j in range(len(done_kind)):
                     master1.done_kind[done_kind[j]] = master1.done_kind[done_kind[j]] + 1
                 for j in range(len(undone_kind)):
@@ -403,12 +412,14 @@ def execution(RUN_TIMES, BREAK_POINT, TRAIN_TIMES, CHO_CYCLE):
 
             cloud, undone, done, done_kind, undone_kind = update_docker(cloud, cur_time, service_coefficient, POD_CPU)
             master1.undone = master1.undone + undone[0]
-            master2.undone = master2.undone + undone[1]
-            master1.done = master1.done + done[0]
+            master2.undone = master2.undone + undone[1] + done[0]
             master2.done = master2.done + done[1]
             # 一共就选了两个高价值节点
             cur_done = [master1.done - pre_done[0], master2.done - pre_done[1]] # 当前时刻完成的请求
             cur_undone = [master1.undone - pre_undone[0], master2.undone - pre_undone[1]] # 当前时刻超时未完成的请求
+            # print("cur_done:",cur_done)
+            # print("cur_undone:",cur_undone)
+            # print("master1.done:",master1.done)
             # 
             pre_done = [master1.done, master2.done]
             pre_undone = [master1.undone, master2.undone]
